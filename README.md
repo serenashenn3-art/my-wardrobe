@@ -4,6 +4,8 @@
 >
 > 一个跨平台的 Agent Skill,适配 **Codex / Claude Code / Kimi** 等支持 SKILL.md 的 AI 编程/办公助手。
 
+[English README](README_EN.md)
+
 ![demo](docs/demo.gif)
 
 📹 完整演示视频:[docs/demo.mp4](docs/demo.mp4)
