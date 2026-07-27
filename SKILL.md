@@ -15,8 +15,10 @@ description: 我的衣橱——衣橱单品拍照建档与杂志拼贴风「搭�
 
 对用户上传的每张单品照片:
 
-1. 识别槽位与档案字段(slot / label / color / style),规则见
+1. 识别槽位与档案字段(slot / label / color / style / seasons),规则见
    [references/categories.md](references/categories.md)
+   - seasons 为数组,取值 春/夏/秋/冬/四季,一件可多季(如长袖裙=春秋,
+     乐福鞋/首饰/包=四季),用于衣橱按季节筛选展示
 2. 抠图:
    - 先试 `python3 scripts/remove_bg.py <照片> -d items/`(需 `pip install rembg`)
    - 不可用时走备选方案,见 [references/style-guide.md](references/style-guide.md)「抠图备选」
@@ -77,6 +79,10 @@ python3 scripts/compose_card_xhs.py spec.json -o outfit-card.png
 
 spec JSON 每项填 `image`(抠图路径)、`id`、`slot`;可加 `title`
 (结构见脚本顶部 docstring)。
+
+每项还可带 `layout` 自定义摆位(衣橱 Widget 拖拽定稿时由前端传入;
+手动构造也可):`{"x","y","h","rot","z"}` = 中心点比例坐标、高度占画幅
+比例、旋转角、层叠顺序。带 layout 的单品跳过 ZONES 自动摆位。
 
 自检与交付:
 

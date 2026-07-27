@@ -14,9 +14,9 @@
 
 1. **Photo intake** — Send photos of clothes, pants, jewelry, shoes, hats, or bags to your AI; it identifies the category and cuts out the item automatically
 2. **AI beautify** — Real-life wrinkles are ironed out by AI image-to-image, producing clean catalog-quality transparent PNGs (prints, collars, and hardware preserved)
-3. **Wardrobe management** — Every item is filed into slots (top / bottom / dress / shoes / bag / hat / jewelry…); misclassified items can be moved manually
-4. **Check-to-style** — Select any combination yourself, or ask the AI to style an outfit by color, style, or occasion
-5. **Outfit cards** — Defaults to a 9:16 magazine-collage card (soft shadows, slight rotation, layered composition, Xiaohongshu/RED-ready); a classic 3:4 labeled layout is also included for WeChat/blog use
+3. **Wardrobe management** — Every item is filed into slots (top / bottom / dress / shoes / bag / hat / jewelry…) and tagged with **seasons** (spring / summer / autumn / winter) for seasonal browsing; misclassified items can be moved manually
+4. **Check-to-style + drag-to-arrange** — Pick any combination, then **drag items freely** on a 9:16 staging canvas (tap to bring forward, ✕ to remove) until the layout feels right; or ask the AI to style by color, style, or occasion
+5. **Outfit cards** — The card is composed from your dragged layout: 9:16 magazine collage (soft shadows, slight rotation, layered composition, Xiaohongshu/RED-ready); a classic 3:4 labeled layout is also included for WeChat/blog use
 
 ## Sample output
 

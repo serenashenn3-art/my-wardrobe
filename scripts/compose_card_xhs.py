@@ -15,6 +15,12 @@ spec JSON:
   ]
 }
 
+单品可选 "layout" 字段(Widget 拖拽定稿时传入):
+  {"x": 0.30, "y": 0.45, "h": 0.38, "rot": -2.0, "z": 7}
+  x,y  = 中心点(画布比例坐标); h = 单品高度占画幅比例;
+  rot  = 旋转角度(度,替代默认哈希微旋转); z = 层叠顺序(越大越靠上)
+带 layout 的单品跳过 ZONES 自动摆位,按给定参数精确落位。
+
 与 compose_card.py 的区别:
 - 画布 9:16 竖版,纯白底,单品之间刻意层叠(大件铺底、包压最上)
 - 无文字标签;单品带柔和投影与确定性微旋转,呈杂志剪贴感
@@ -132,19 +138,36 @@ def compose(spec: dict, out_path: str):
             box = ZONES["hat"]
         return box
 
-    ordered = sorted(items, key=lambda it: PAINT_ORDER.index(it.get("slot", "accessory"))
-                     if it.get("slot") in PAINT_ORDER else len(PAINT_ORDER))
+    def paint_key(it):
+        lay = it.get("layout") or {}
+        if isinstance(lay.get("z"), (int, float)):
+            return (1, lay["z"])
+        slot = it.get("slot", "accessory")
+        return (0, PAINT_ORDER.index(slot) if slot in PAINT_ORDER else len(PAINT_ORDER))
+
+    ordered = sorted(items, key=paint_key)
 
     for it in ordered:
         path = it["image"]
         im = Image.open(path).convert("RGBA")
         im = erase_watermark(im)
         im = trim_alpha(im)
-        box = zone_of(it.get("slot", "accessory"))
-        fill = FILLS.get(it.get("slot", "accessory"), 0.96)
-        im, x, y = fit_box(im, box, W, H, fill=fill)
+        lay = it.get("layout") or {}
+        if isinstance(lay.get("h"), (int, float)) and lay["h"] > 0:
+            # 拖拽定稿模式: 按 Widget 传来的比例参数精确落位
+            scale = lay["h"] * H / im.height
+            nw = max(1, int(im.width * scale))
+            nh = max(1, int(im.height * scale))
+            im = im.resize((nw, nh), Image.LANCZOS)
+            x = int(lay.get("x", 0.5) * W - nw / 2)
+            y = int(lay.get("y", 0.5) * H - nh / 2)
+            ang = float(lay.get("rot", 0.0))
+        else:
+            box = zone_of(it.get("slot", "accessory"))
+            fill = FILLS.get(it.get("slot", "accessory"), 0.96)
+            im, x, y = fit_box(im, box, W, H, fill=fill)
+            ang = rotation_for(it.get("id") or it.get("label") or path)
         im = soft_shadow(im)
-        ang = rotation_for(it.get("id") or it.get("label") or path)
         bw, bh = im.width, im.height
         im = im.rotate(-ang, expand=True, resample=Image.BICUBIC)
         x -= (im.width - bw) // 2   # 旋转膨胀后保持中心不动
