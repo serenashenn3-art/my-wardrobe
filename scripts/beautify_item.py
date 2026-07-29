@@ -24,6 +24,11 @@ import numpy as np
 
 
 def load_rgba(path):
+    """加载图片为 RGBA float 数组。
+
+    对非 RGBA 输入(JPEG/RGB/P/L 模式等)统一做 .convert("RGBA") 转换。
+    对无透明信息的近白底图(全不透明), 自动从近白色区域推断 alpha。
+    """
     from PIL import Image
     img = Image.open(path).convert("RGBA")
     arr = np.asarray(img).astype(np.float32) / 255.0
@@ -93,6 +98,25 @@ def main():
         if not os.path.exists(src):
             print(f"[warn] 找不到 {src},跳过", file=sys.stderr)
             continue
+
+        # 拒绝非 RGBA / 透明底输入, 避免误判
+        # load_rgba() 内部会做 .convert("RGBA"), 所以这里检查原始模式
+        from PIL import Image
+        try:
+            with Image.open(src) as im:
+                mode = im.mode
+        except Exception as e:
+            print(f"[error] 无法打开 {src}: {e}", file=sys.stderr)
+            continue
+
+        if mode not in ("RGBA", "LA", "P", "RGB", "L"):
+            print(f"[skip] 不支持的图片模式 {mode}: {src}", file=sys.stderr)
+            continue
+
+        # RGB/L 模式的图(非透明底)可以处理, 但会提示
+        if mode in ("RGB", "L"):
+            print(f"[warn] {src} 模式为 {mode}(无透明通道), 将自动推断 alpha 后处理", file=sys.stderr)
+
         base = os.path.splitext(os.path.basename(src))[0]
         if args.outdir:
             dst = os.path.join(args.outdir, base + ".png")

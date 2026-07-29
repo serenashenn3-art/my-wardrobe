@@ -60,10 +60,37 @@ PAINT_ORDER = ["bottom", "dress", "top", "outerwear", "scarf",
 # 同角落冲突时的盒微调: hat+jewelry 同时在场, jewelry 下移
 JITTER_SEED_SALT = "outfit-xhs-v1"
 
+# ── 水印擦除参数 ──
+WM_REGION_X = 0.24        # 水印区域: x < 24%
+WM_REGION_Y = 0.83        # 水印区域: y > 83%
+WM_ALPHA_MIN = 40          # 水印 alpha 范围
+WM_ALPHA_MAX = 235
+WM_RGB_THRESHOLD = 190     # 水印像素 RGB 均 > 190
+WM_PIXEL_RATIO_THRESHOLD = 0.005  # 角落中符合条件的像素占比 < 0.5% 才认为有水印
+
 
 def trim_alpha(im: Image.Image) -> Image.Image:
     bbox = im.split()[-1].getbbox()
     return im.crop(bbox) if bbox else im
+
+
+def _count_watermark_pixels(im: Image.Image) -> int:
+    """统计左下角水印区域中符合条件的像素数量。
+
+    用于判断该图是否真的含有 AI 水印。
+    若像素极少 (< 总像素 0.5%), 认为无水印, 跳过擦除避免误伤。
+    """
+    import numpy as np
+    w, h = im.size
+    x_end = int(w * WM_REGION_X)
+    y_start = int(h * WM_REGION_Y)
+    region = np.array(im.crop((0, y_start, x_end, h)).convert("RGBA"))
+    if region.size == 0:
+        return 0
+    r, g, b, a = region[..., 0], region[..., 1], region[..., 2], region[..., 3]
+    is_light = (r > WM_RGB_THRESHOLD) & (g > WM_RGB_THRESHOLD) & (b > WM_RGB_THRESHOLD)
+    is_semi = (a > WM_ALPHA_MIN) & (a < WM_ALPHA_MAX)
+    return int(np.count_nonzero(is_light & is_semi))
 
 
 def erase_watermark(im: Image.Image) -> Image.Image:
@@ -72,15 +99,55 @@ def erase_watermark(im: Image.Image) -> Image.Image:
     水印特征固定: 位于左下角落(x<24%, y>83%), 近白灰色(200-245),
     半透明(alpha 40-235)。衣服本体即使白色也多为不透明(alpha 255),
     且单品主体居中、一般不伸进该角落,误伤风险极低。
+
+    误伤检测与回退:
+    1. 先统计水印区域符合条件的像素数量
+    2. 若占比 < 0.5%, 认为无水印, 跳过擦除(原图返回)
+    3. 若占比异常高 (>20%), 可能是白色单品伸入该区域, 也跳过避免大面积误伤
+    4. 正常擦除时, 仅擦除半透明(alpha 40-235)的浅色像素, 不触碰不透明区域
     """
+    import numpy as np
+
     w, h = im.size
-    px = im.load()
-    for y in range(int(h * 0.83), h):
-        for x in range(int(w * 0.24)):
-            r, g, b, a = px[x, y]
-            if 40 < a < 235 and r > 190 and g > 190 and b > 190:
-                px[x, y] = (r, g, b, 0)
-    return im
+    x_end = int(w * WM_REGION_X)
+    y_start = int(h * WM_REGION_Y)
+    region_w = x_end
+    region_h = h - y_start
+    if region_w == 0 or region_h == 0:
+        return im
+
+    # 统计水印像素
+    wm_count = _count_watermark_pixels(im)
+    total_region = region_w * region_h
+    wm_ratio = wm_count / total_region if total_region > 0 else 0
+
+    # 无水印: 跳过
+    if wm_ratio < WM_PIXEL_RATIO_THRESHOLD:
+        return im
+
+    # 异常高: 可能是白色单品伸入该区域, 跳过避免误伤
+    if wm_ratio > 0.20:
+        print(f"[warn] 水印区域占比 {wm_ratio:.1%} 异常高, 疑似白色单品伸入左下角, "
+              f"跳过水印擦除以避免误伤", file=sys.stderr)
+        return im
+
+    # 正常擦除: 仅处理半透明的浅色像素
+    arr = np.array(im.convert("RGBA")).astype(np.uint8)
+    r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
+    is_light = (r > WM_RGB_THRESHOLD) & (g > WM_RGB_THRESHOLD) & (b > WM_RGB_THRESHOLD)
+    is_semi = (a > WM_ALPHA_MIN) & (a < WM_ALPHA_MAX)
+    erase_mask = is_light & is_semi
+    # 仅在左下角区域应用
+    erase_mask[:y_start, :] = False
+    erase_mask[:, x_end:] = False
+
+    erased_count = int(erase_mask.sum())
+    arr[erase_mask, 3] = 0  # 将匹配像素的 alpha 置 0
+
+    if erased_count > 0:
+        print(f"[info] 擦除水印像素 {erased_count} 个 (区域占比 {wm_ratio:.1%})", file=sys.stderr)
+
+    return Image.fromarray(arr, "RGBA")
 
 
 def soft_shadow(im: Image.Image, blur=18, dy=16, opacity=90) -> Image.Image:

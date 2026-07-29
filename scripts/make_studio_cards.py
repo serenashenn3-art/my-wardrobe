@@ -9,14 +9,17 @@
 4. 底部添加品牌名(有品牌)或样式种类(无品牌)
 
 用法:
-    # 基本用法: 读 wardrobe.json, 从 items/ 取抠图, 从 closet-studio/ 取 AI 平铺图
+    # 基本用法: 读 wardrobe.json, 从 items/ 取抠图, 从 closet-studio/ 取 AI 平铺图, 输出到 closet-studio/
     python3 make_studio_cards.py wardrobe.json
 
-    # 指定输出目录
-    python3 make_studio_cards.py wardrobe.json -o closet-studio/
+    # 指定输出目录 (AI 平铺图仍从默认 closet-studio/ 读取)
+    python3 make_studio_cards.py wardrobe.json -o output/
 
-    # 指定抠图目录和 AI 平铺图目录
-    python3 make_studio_cards.py wardrobe.json -i items/ -s closet-studio/
+    # 分别指定 AI 平铺图输入目录和 card 输出目录
+    python3 make_studio_cards.py wardrobe.json --flat-dir closet-studio/ --outdir cards/
+
+    # 指定抠图目录和 AI 平铺图输入目录
+    python3 make_studio_cards.py wardrobe.json -i items/ --flat-dir closet-studio/
 
     # 自定义背景色和画布大小
     python3 make_studio_cards.py wardrobe.json --bg 255,255,255 --canvas 1200
@@ -91,11 +94,16 @@ def get_label_text(item):
     return slot_cn
 
 
-def find_flat_image(item, studio_dir):
-    """查找 AI 平铺图: -flat.jpg > -flatlay-v2.jpg > -flatlay.jpg"""
+def find_flat_image(item, flat_dir):
+    """查找 AI 平铺图: -flat.jpg > -flatlay-v2.jpg > -flatlay.jpg
+
+    Args:
+        item: 单品字典
+        flat_dir: AI 平铺图输入目录 (只读, 不做输出)
+    """
     stem = Path(item["file"]).stem
     for name in [f"{stem}-flat.jpg", f"{stem}-flatlay-v2.jpg", f"{stem}-flatlay.jpg"]:
-        p = studio_dir / name
+        p = flat_dir / name
         if p.exists():
             return p
     return None
@@ -251,11 +259,21 @@ def add_soft_shadow(im, offset_y=6, blur=12, opacity=20):
 
 # ═══ 单品处理 ═══
 
-def process_item(item, items_dir, studio_dir, bg_color, canvas_size, margin_pct):
-    """处理单件单品, 生成棚拍级 card 图。"""
+def process_item(item, items_dir, flat_dir, out_dir, bg_color, canvas_size, margin_pct):
+    """处理单件单品, 生成棚拍级 card 图。
+
+    Args:
+        item: 单品字典
+        items_dir: rembg 抠图目录 (透明底 PNG 输入)
+        flat_dir: AI 平铺图输入目录 (只读)
+        out_dir: card 图输出目录
+        bg_color: 背景色 (R, G, B)
+        canvas_size: 画布尺寸
+        margin_pct: 内边距比例
+    """
     stem = Path(item["file"]).stem
 
-    flat_path = find_flat_image(item, studio_dir)
+    flat_path = find_flat_image(item, flat_dir)
     photo_path = items_dir / f"{item.get('photo', '')}.png"
 
     if flat_path:
@@ -328,7 +346,7 @@ def process_item(item, items_dir, studio_dir, bg_color, canvas_size, margin_pct)
     color = (55, 48, 38, 255) if has_brand else (110, 100, 85, 255)
     draw.text((tx, ty), label_text, fill=color, font=font)
 
-    out_path = studio_dir / f"{stem}-card.png"
+    out_path = out_dir / f"{stem}-card.png"
     canvas.convert("RGB").save(out_path, quality=95)
     print(f"[ok] item{item['id']} {stem} ({src_type}) -> {label_text}")
     return True
@@ -340,11 +358,15 @@ def main():
     )
     ap.add_argument("wardrobe", help="wardrobe.json 路径")
     ap.add_argument("-o", "--outdir", default=None,
-                    help="输出目录 (默认与 wardrobe.json 同目录下的 closet-studio/)")
+                    help="card 图输出目录 (默认与 wardrobe.json 同目录下的 closet-studio/)")
     ap.add_argument("-i", "--items-dir", default=None,
                     help="rembg 抠图目录 (默认与 wardrobe.json 同目录下的 items/)")
+    ap.add_argument("--flat-dir", default=None,
+                    help="AI 平铺图输入目录 (默认与 wardrobe.json 同目录下的 closet-studio/; 只读不写入)")
     ap.add_argument("-s", "--studio-dir", default=None,
-                    help="AI 平铺图目录 + card 输出目录 (默认同 -o)")
+                    help="[已废弃] 旧参数, 同时作为 AI 平铺图输入和 card 输出目录。"
+                         "新代码请用 --flat-dir 和 --outdir 分别指定。"
+                         "若仍传入, 则 flat-dir 和 outdir 都设为此值")
     ap.add_argument("--bg", default="245,241,232",
                     help="背景色 R,G,B (默认 245,241,232 = #F5F1E8)")
     ap.add_argument("--canvas", type=int, default=DEFAULT_CANVAS,
@@ -356,10 +378,19 @@ def main():
     wardrobe_path = Path(args.wardrobe).resolve()
     root = wardrobe_path.parent
     items_dir = Path(args.items_dir).resolve() if args.items_dir else root / "items"
-    studio_dir = Path(args.studio_dir).resolve() if args.studio_dir else (
-        Path(args.outdir).resolve() if args.outdir else root / "closet-studio"
-    )
-    studio_dir.mkdir(parents=True, exist_ok=True)
+
+    # 拆分输入/输出目录:
+    #   flat_dir  = AI 平铺图输入目录 (只读)
+    #   out_dir   = card 图输出目录 (只写)
+    # 兼容旧 -s/--studio-dir 参数: 同时作为输入和输出
+    if args.studio_dir:
+        flat_dir = Path(args.studio_dir).resolve()
+        out_dir = Path(args.studio_dir).resolve()
+    else:
+        flat_dir = Path(args.flat_dir).resolve() if args.flat_dir else root / "closet-studio"
+        out_dir = Path(args.outdir).resolve() if args.outdir else root / "closet-studio"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     bg_color = tuple(int(x) for x in args.bg.split(","))
 
@@ -367,13 +398,14 @@ def main():
     items = wardrobe["items"]
 
     print(f"衣橱: {wardrobe_path.name}  共 {len(items)} 件")
-    print(f"抠图目录: {items_dir}")
-    print(f"输出目录: {studio_dir}")
+    print(f"抠图目录(输入): {items_dir}")
+    print(f"AI平铺图目录(输入): {flat_dir}")
+    print(f"输出目录: {out_dir}")
     print(f"背景色: {bg_color}  画布: {args.canvas}px\n")
 
     n_ok = sum(
         1 for item in items
-        if process_item(item, items_dir, studio_dir, bg_color, args.canvas, args.margin)
+        if process_item(item, items_dir, flat_dir, out_dir, bg_color, args.canvas, args.margin)
     )
     print(f"\n完成: {n_ok}/{len(items)} 件")
 

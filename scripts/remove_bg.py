@@ -14,6 +14,7 @@ import argparse
 import glob
 import os
 import sys
+import traceback
 
 try:
     from rembg import remove
@@ -58,12 +59,34 @@ def main():
     files = []
     for pat in args.inputs:
         files.extend(glob.glob(pat) or [pat])
+
+    # 批量处理: 单张异常不中断后续
+    n_ok, n_fail = 0, 0
     for src in files:
         if not os.path.exists(src):
             print(f"[warn] 找不到 {src},跳过", file=sys.stderr)
+            n_fail += 1
             continue
         dst = os.path.join(args.outdir, os.path.basename(src))
-        process(src, dst, white=args.white, model=args.model)
+        try:
+            process(src, dst, white=args.white, model=args.model)
+            n_ok += 1
+        except Exception as e:
+            n_fail += 1
+            print(f"[error] 抠图失败: {src}", file=sys.stderr)
+            print(f"        原因: {e}", file=sys.stderr)
+            if "--debug" in sys.argv:
+                traceback.print_exc(file=sys.stderr)
+
+    total = len(files)
+    if n_fail > 0:
+        print(f"\n批量抠图完成: {n_ok}/{total} 成功, {n_fail} 失败", file=sys.stderr)
+    else:
+        print(f"\n批量抠图完成: {n_ok}/{total} 全部成功")
+
+    # 有失败时返回非零退出码, 方便脚本调用方检测
+    if n_fail > 0 and n_ok == 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
