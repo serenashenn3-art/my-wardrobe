@@ -1,8 +1,8 @@
-# 我的衣橱 · My Wardrobe
+# 我的衣橱 2.0 · My Wardrobe 2.0
 
-> 拍照建档 · AI 美化去皱 · 勾选搭配 · 一键生成小红书风搭配卡
+> 批量拍照建档 · AI 美化去皱 · 棚拍级展示 · 拖拽搭配卡 · 二手回收管理
 >
-> 一个跨平台的 Agent Skill,适配 **Codex / Claude Code / Kimi** 等支持 SKILL.md 的 AI 编程/办公助手。
+> 一个跨平台的 Agent Skill,适配 **Codex / Claude Code / Kimi / TRAE** 等支持 SKILL.md 的 AI 编程/办公助手。
 
 [English README](README_EN.md)
 
@@ -10,17 +10,28 @@
 
 📹 完整演示视频:[docs/demo.mp4](docs/demo.mp4)
 
+## 2.0 新功能
+
+| 功能 | 说明 |
+|------|------|
+| **批量上传** | 一次上传最多 30 件单品,自动建档 |
+| **衣橱管理 Web 应用** | 浏览器直接打开,5 大功能页,无需安装依赖 |
+| **分类浏览** | 按种类(slot)+季节(春/夏/秋/冬/四季)筛选,可修改分类 |
+| **品牌浏览** | 按品牌分组,无品牌归「未知品牌」,可手动输入品牌名 |
+| **拖拽搭配卡** | 画布上自由拖拽、缩放、置顶、移除,输入标题,导出 PNG |
+| **展示墙** | 4 列网格按种类排列,统一奶油米色背景 |
+| **二手回收** | 不穿的衣服标记为出售(原价+售价+成色+渠道)或捐赠(选机构) |
+| **棚拍级单品图** | rembg 精准去背景 + 边缘羽化 + 阴影压制 + 自动色阶 + 品牌标签 |
+| **预览墙** | 全部单品 4 列网格一览,统一风格 |
+
 ## 它能做什么
 
-1. **拍照录入** —— 把衣服、裤子、首饰、鞋、帽、包等单品照片发给 AI,自动识别品类并抠图建档
-2. **AI 美化** —— 实拍褶皱自动抚平,生成透明底、电商级整洁单品图(保留印花、领口、五金细节)
-3. **衣橱管理** —— 全部单品按槽位(上装/下装/连衣裙/鞋/包/帽/首饰…)分类,并按 **春/夏/秋/冬** 季节标签筛选展示,识别错了可手动调类
-4. **勾选搭配 + 拖拽定稿** —— 想搭哪几件勾哪几件,在 9:16 搭配台上**自由拖拽摆位**(点击置顶、✕移除),摆到满意再确认;也可以让 AI 按配色/风格/场合推荐
-5. **生成搭配卡** —— 按你的拖拽布局合成小红书 9:16 竖版杂志拼贴卡(柔和投影 + 微旋转 + 层叠构图),也有经典 3:4 带标签版,直发小红书/公众号
-
-## 示例成品
-
-![搭配卡示例](docs/demo-card.png)
+1. **批量录入** —— 一次上传最多 30 件单品照片,自动识别品类并抠图建档
+2. **AI 美化** —— 实拍褶皱自动抚平,生成透明底、电商级整洁单品图
+3. **棚拍级展示** —— 1500×1500 奶油米色画布,统一风格,底部品牌/品类标签
+4. **衣橱管理** —— Web 应用分类浏览(种类/季节/品牌),可修改、删除、回收
+5. **拖拽搭配** —— 在搭配卡画布上自由拖拽摆位,缩放置顶,输入标题,导出 PNG
+6. **二手回收** —— 不穿的衣服标记出售(输入价格)或捐赠(选机构)
 
 ## 安装
 
@@ -30,36 +41,43 @@
 |------|----------|
 | Claude Code | `~/.claude/skills/my-wardrobe/` |
 | Codex | `~/.codex/skills/my-wardrobe/` |
-| Kimi | 通过技能管理导入,或放入技能目录 |
+| Kimi | 通过技能管理导入 |
+| TRAE | `~/.trae-cn/skills/my-wardrobe/` |
 
 放好后对 AI 说「拍下这件衣服,放进我的衣橱」「帮我从衣橱里搭一套通勤装」即可触发。
-
-> 目录名与 `SKILL.md` 里的 `name: my-wardrobe` 保持一致即可;中文名「我的衣橱」同时写进了触发词。
 
 ## 目录结构
 
 ```
 my-wardrobe/
 ├── SKILL.md                     # 技能入口:工作流与规则
+├── app/
+│   └── wardrobe-app.html        # 衣橱管理 Web 应用(5 大功能页)
 ├── scripts/
 │   ├── remove_bg.py             # 本地抠图(rembg)
-│   ├── beautify_item.py         # 本地去皱兜底(OpenCV 频率分离)
+│   ├── beautify_item.py         # 本地去皱(OpenCV 频率分离)
+│   ├── make_studio_cards.py     # 棚拍级单品图生成(rembg 精准去背景)
+│   ├── make_contact_sheet.py    # 预览墙生成(4列网格)
 │   ├── compose_card.py          # 经典 3:4 带标签搭配卡
 │   └── compose_card_xhs.py      # 小红书 9:16 杂志拼贴卡(默认)
 ├── references/
 │   ├── categories.md            # 单品槽位/分类与搭配规则
-│   └── style-guide.md           # 两版卡片的视觉规范 + 水印擦除规则
-├── assets/
-│   ├── reference-xhs-card.jpg   # 小红书版式基准
-│   └── reference-card.jpeg      # 经典版式基准
+│   └── style-guide.md           # 视觉规范 + 棚拍级处理管线
+├── constraints/
+│   └── rules.md                 # 全局约束(数据/图像/预览墙/回收)
+├── examples/
+│   ├── bulk-upload-workflow.md  # 批量上传工作流示例
+│   └── outfit-card-workflow.md  # 搭配卡生成工作流示例
+├── assets/                      # 参考图
 └── docs/                        # 演示视频、GIF、示例成品
 ```
 
 ## 依赖
 
 - 必需:`python3` + `Pillow`(合成搭配卡)
-- 可选:`rembg`(本地抠图)、`opencv-python-headless`(本地去皱)
+- 可选:`rembg`(本地抠图)、`opencv-python-headless`(本地去皱)、`numpy`(棚拍级 card)
 - AI 抠图/美化优先使用各平台自带的图像生成能力,本地脚本仅作兜底
+- Web 应用为纯前端 HTML,无需安装任何依赖
 
 ## 使用流程速览
 
@@ -70,25 +88,18 @@ python3 scripts/remove_bg.py 照片.jpg -d items/
 # 2. 美化(无 AI 重绘能力时的本地兜底)
 python3 scripts/beautify_item.py items/item1.png -o items/item1.png
 
-# 3. 生成小红书风搭配卡
+# 3. 生成棚拍级单品图
+python3 scripts/make_studio_cards.py wardrobe.json
+
+# 4. 生成预览墙
+python3 scripts/make_contact_sheet.py wardrobe.json
+
+# 5. 生成小红书风搭配卡
 python3 scripts/compose_card_xhs.py spec.json -o outfit.png
+
+# 6. 打开 Web 应用管理衣橱
+open app/wardrobe-app.html
 ```
-
-`spec.json` 示例:
-
-```json
-{
-  "title": "法式复古通勤",
-  "items": [
-    {"image": "items/item15.png", "id": "item15", "slot": "dress"},
-    {"image": "items/item40.png", "id": "item40", "slot": "hat"},
-    {"image": "items/item20.png", "id": "item20", "slot": "shoes"},
-    {"image": "items/item37.png", "id": "item37", "slot": "bag"}
-  ]
-}
-```
-
-槽位可选:`dress / top / outerwear / bottom / shoes / bag / hat / jewelry / scarf / socks / accessory`。
 
 ## License
 

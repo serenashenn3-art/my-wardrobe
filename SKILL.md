@@ -1,29 +1,84 @@
 ---
 name: my-wardrobe
-description: 我的衣橱——衣橱单品拍照建档与杂志拼贴风「搭配样式卡」生成。当用户拍摄或上传衣服、裤子、裙子、鞋子、包包、帽子、首饰、袜子、丝巾等穿搭单品的照片,希望抠图建档、AI 美化去皱、挑选搭配、生成白底杂志拼贴风 OOTD 搭配卡(小红书竖版/公众号风)时使用。触发词:我的衣橱、搭配卡、穿搭卡、OOTD、今日穿搭、单品抠图、衣橱、衣帽间、outfit、wardrobe、搭配样式卡、帮我搭配、穿搭拼贴。
+description: "我的衣橱2.0——衣橱单品拍照建档、棚拍级展示、搭配卡生成与二手回收管理。当用户拍摄或上传衣服、裤子、裙子、鞋子、包包、帽子、首饰等穿搭单品照片,希望批量抠图建档(支持一次上传30件)、AI美化去皱、棚拍级展示、分类浏览(种类/季节/品牌)、拖拽生成搭配卡、二手出售或捐赠回收时使用。触发词:我的衣橱、搭配卡、穿搭卡、OOTD、今日穿搭、单品抠图、衣橱、衣帽间、outfit、wardrobe、搭配样式卡、帮我搭配、穿搭拼贴、回收、二手出售、捐赠、批量上传。"
 ---
 
-# 我的衣橱(My Wardrobe)· 搭配样式卡
+# 我的衣橱 2.0 (My Wardrobe)· 搭配样式卡 + 衣橱管理
 
-把用户的单品照片变成白底立体单品图,挑选搭配后合成杂志拼贴风搭配卡。
+把用户的单品照片变成棚拍级展示图,在 Web 应用中分类浏览、拖拽搭配、
+一键生成杂志拼贴风搭配卡,并支持二手出售与捐赠回收。
+
 视觉基准:`assets/reference-xhs-card.jpg`(小红书竖版)与
 `assets/reference-card.jpeg`(经典带标签版)。
+
+## 架构概览
+
+```
+my-wardrobe/
+├── SKILL.md                     # 技能入口(本文件)
+├── app/
+│   └── wardrobe-app.html        # 衣橱管理 Web 应用(5 大功能页)
+├── scripts/
+│   ├── remove_bg.py             # rembg 本地抠图
+│   ├── beautify_item.py         # OpenCV 频率分离去皱
+│   ├── make_studio_cards.py     # 棚拍级单品图生成(rembg 精准去背景)
+│   ├── make_contact_sheet.py    # 预览墙生成(4列网格)
+│   ├── compose_card_xhs.py      # 小红书 9:16 搭配卡
+│   └── compose_card.py          # 经典 3:4 带标签搭配卡
+├── references/
+│   ├── categories.md            # 槽位/分类与搭配规则
+│   └── style-guide.md           # 视觉规范 + 棚拍级处理管线
+├── constraints/
+│   └── rules.md                 # 全局约束(数据/图像/预览墙/回收)
+├── examples/
+│   ├── bulk-upload-workflow.md  # 批量上传工作流示例
+│   └── outfit-card-workflow.md  # 搭配卡生成工作流示例
+└── assets/                      # 参考图
+```
+
+## Web 应用(`app/wardrobe-app.html`)
+
+一个自包含的 HTML 文件,浏览器直接打开即可使用,无需安装任何依赖。
+
+### 五大功能页
+
+| 页签 | 功能 | 说明 |
+|------|------|------|
+| 分类浏览 | 按种类+季节浏览 | 按 slot 分组,季节筛选(春/夏/秋/冬/四季),可修改分类、删除单品、移至回收 |
+| 品牌浏览 | 按品牌分类 | 有品牌归品牌组,无品牌归「未知品牌」组,可手动输入品牌名 |
+| 搭配卡 | 拖拽式搭配生成 | 左侧单品库选品,画布上拖拽摆位、缩放、置顶、移除,底部输入标题,一键导出 PNG |
+| 展示墙 | 全单品展示墙 | 4 列网格按种类排列,统一奶油米色背景 |
+| 回收 | 二手出售/捐赠 | 将不穿的衣服标记为出售(输入原价+售价+成色+渠道)或捐赠(选机构) |
+
+### 批量上传
+
+- 支持一次上传最多 **30 件**单品
+- 上传后自动创建卡片,可后续修改分类、品牌、季节
+- 上传进度条实时显示
+
+### 回收功能
+
+- **二手出售**:输入原价、出售价格、成色(全新~6成新)、渠道(闲鱼/转转/朋友圈等)
+- **捐赠**:选择捐赠机构(爱心衣救/白鲸鱼/飞蚂蚁等)
+- 顶部汇总:出售总数 + 预计总收入
+- 可随时移回衣橱
 
 ## 工作流
 
 ### 1. 录入单品
 
-对用户上传的每张单品照片:
+对用户上传的每张单品照片(支持批量,一次最多 30 件):
 
-1. 识别槽位与档案字段(slot / label / color / style / seasons),规则见
-   [references/categories.md](references/categories.md)
-   - seasons 为数组,取值 春/夏/秋/冬/四季,一件可多季(如长袖裙=春秋,
-     乐福鞋/首饰/包=四季),用于衣橱按季节筛选展示
+1. 识别槽位与档案字段(slot / label / color / style / seasons / brand / features),
+   规则见 [references/categories.md](references/categories.md)
+   - seasons 为数组,取值 春/夏/秋/冬/四季,一件可多季
+   - brand 为可选字段,识别不出时留空(不编造品牌名)
+   - features 为可选数组,记录单品特征(面料、领型、五金件等)
 2. 抠图:
    - 先试 `python3 scripts/remove_bg.py <照片> -d items/`(需 `pip install rembg`)
    - 不可用时走备选方案,见 [references/style-guide.md](references/style-guide.md)「抠图备选」
 3. 抠图存为透明底 PNG,统一放进工作目录的 `items/`
-4. **美化(去皱板正)**:让拍出来的衣服褶皱少、整洁板正,呈电商平铺 catalog 质感
+4. **美化(去皱板正)**:让拍出来的衣服褶皱少、整洁板正,呈电商 catalog 质感
    - 首选 **AI 重绘**(效果好一个量级):用图像生成工具 image-to-image,
      透明底 + 1:1,prompt 模板:
 
@@ -35,68 +90,76 @@ description: 我的衣橱——衣橱单品拍照建档与杂志拼贴风「搭�
      ```
 
      注意:
-     - 单品形态易漂移时(连衣裙/连体裤等)在 prompt 里写死结构,如
-       "DRESS with continuous flared SKIRT hem, not a romper, not shorts,
-       no leg openings"
-     - 遇到限流(HTTP 424)就 sleep 20–30 秒后重试同一件
-     - **逐件审查**重绘结果与原图的保真度(印花、领口、五金件),
-       不合格的用更精确的 prompt 重绘或回退本地方案
-   - 无 AI 重绘能力时回退本地脚本(对轻褶有效,深褶有限):
+     - 单品形态易漂移时(连衣裙/连体裤等)在 prompt 里写死结构
+     - 遇到限流(HTTP 424)就 sleep 20–30 秒后重试
+     - **逐件审查**重绘结果与原图的保真度
+   - 无 AI 重绘能力时回退本地脚本:
 
      ```bash
      python3 scripts/beautify_item.py items/item1.png -o items/item1.png
      ```
 
-5. 向用户回报清单:每件一行「slot · label · 文件名」
+5. **棚拍级单品图生成**:将美化后的单品统一封装为棚拍级展示图
+   - 1500×1500 奶油米色(#F5F1E8)画布,8% 内边距
+   - 优先使用 AI 平铺图(-flat.jpg),用 rembg 精准去背景
+   - 无 AI 平铺图时回退到 rembg 抠图 + 棚拍增强管线
+   - 自动裁切 AI 水印(底部 6%)、去白边光晕、边缘羽化、阴影压制、自动色阶
+   - 底部添加品牌名(有品牌,粗体)或「品类·样式」标签(无品牌,常规)
 
-一次录入多件时逐张处理;照片里有多个单品(如一身穿搭照)时,
-先问用户要拆成几件,分别裁剪后再抠图。
+     ```bash
+     python3 scripts/make_studio_cards.py wardrobe.json
+     ```
 
-### 2. 挑选搭配
+6. **预览墙生成**:将所有单品 card 图排列成 4 列网格预览墙
 
-列出已建档单品,请用户选择本套搭配的件数与组合。用户说「帮我搭」时:
+     ```bash
+     python3 scripts/make_contact_sheet.py wardrobe.json
+     ```
 
-- 按 [references/categories.md](references/categories.md) 的槽位规则组一套
-  (上装/连衣裙 + 下装 + 鞋为核心,包/帽子/首饰点缀)
+7. 向用户回报清单:每件一行「slot · label · 文件名」
+
+### 2. Web 应用管理
+
+打开 `app/wardrobe-app.html` 进行可视化管理:
+- **分类浏览**:按种类+季节筛选,修改分类、删除、移至回收
+- **品牌浏览**:按品牌分组,手动输入/修改品牌名
+- **搭配卡**:拖拽选品、缩放置顶、输入标题、导出 PNG
+- **展示墙**:4 列网格全览
+- **回收**:二手出售(原价+售价+成色+渠道)或捐赠(机构选择)
+
+### 3. 挑选搭配
+
+用户说「帮我搭」时:
+- 按 [references/categories.md](references/categories.md) 槽位规则组一套
 - 说明理由(配色、风格、场合),让用户确认或替换
+- 用户也可在 Web 应用搭配卡页自行拖拽选品
 
-### 3. 生成搭配卡
+### 4. 生成搭配卡
 
 两种版式,默认用小红书竖版:
 
 1. **小红书竖版(默认)**:`scripts/compose_card_xhs.py`
-   - 1152×2048(9:16),纯白底,无单品标签,杂志剪贴感
-   - 大件铺底、包压最上,单品带柔和投影 + 确定性微旋转(±3°)
-   - 自动擦除 AI 美化图左下角的「AI生成」水印(见 style-guide)
-   - 底部一行可选小号题注(spec 里给 `title`)
-2. **经典 3:4 带标签版**:`scripts/compose_card.py`(原版式,公众号风)
-
-执行(以小红书版为例):
+   - 1152×2048(9:16),纯白底,杂志剪贴感,柔和投影 + 微旋转
+2. **经典 3:4 带标签版**:`scripts/compose_card.py`
 
 ```bash
 python3 scripts/compose_card_xhs.py spec.json -o outfit-card.png
 ```
 
-spec JSON 每项填 `image`(抠图路径)、`id`、`slot`;可加 `title`
-(结构见脚本顶部 docstring)。
+spec JSON 支持 `layout` 自定义摆位(拖拽定稿时由前端传入):
+`{"x","y","h","rot","z"}` = 中心点比例坐标、高度比例、旋转角、层叠顺序。
 
-每项还可带 `layout` 自定义摆位(衣橱 Widget 拖拽定稿时由前端传入;
-手动构造也可):`{"x","y","h","rot","z"}` = 中心点比例坐标、高度占画幅
-比例、旋转角、层叠顺序。带 layout 的单品跳过 ZONES 自动摆位。
+### 5. 二手回收
 
-自检与交付:
-
-1. 打开输出图自检,对照 [references/style-guide.md](references/style-guide.md):
-   白底纯净、无水印穿帮、单品不溢出画布、层叠关系自然(包压大件上)、
-   经典版额外确认标签无乱码(含中文时确认 CJK 字体生效)
-2. 不满意可改 spec 重跑;布局规则需调整时直接改脚本里的 `ZONES` 表
-3. 把成品图交付给用户,附单品清单
+在 Web 应用「回收」页:
+- 将不需要的单品移至**二手出售**(输入原价、售价、成色、渠道)
+- 或移至**捐赠**(选择捐赠机构)
+- 可随时移回衣橱
 
 ## 注意
 
-- 脚本只依赖 Pillow;合成前 `pip install pillow` 若缺失
-- 本地去皱脚本依赖 OpenCV:`pip install opencv-python-headless` 后使用
-- 标签含中文时脚本会自动切换到 CJK 字体,无需干预
-- 用户没有品牌信息时,label 用「品类 + 颜色」,不要编造品牌名
-- 小红书版式默认 9:16(1152×2048);经典版默认 3:4,
-  用户要方形/横版时改 spec 里的 `canvas`
+- 脚本依赖: Pillow(必需), rembg + numpy(棚拍级 card), opencv-python-headless(本地去皱)
+- Web 应用为纯前端,无需安装任何依赖,浏览器直接打开
+- 标签含中文时脚本自动切换 CJK 字体
+- 用户没有品牌信息时,label 用「品类 + 颜色」,不编造品牌名
+- 全局约束见 [constraints/rules.md](constraints/rules.md)
